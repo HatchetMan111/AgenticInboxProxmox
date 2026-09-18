@@ -129,10 +129,11 @@ ${msg ? `<div class="card">${msg}</div>` : ""}
 </form>
 </div>
 <div class="card"><h2>Hinweis: lokal vs. Cloudflare</h2>
-<p>Dieses LXC-Setup fährt die <b>lokale Emulation</b> (<code>npm run dev</code>):
-UI + Entwicklung funktionieren sofort im LAN. Echter Mail-Empfang/-Versand
-(Email Routing, R2, Workers AI, Access) braucht danach ein
-<code>npm run deploy</code> auf einen Cloudflare-Account mit Domain.</p>
+<p>Dieses LXC-Setup fährt die <b>login-freie lokale Emulation</b>
+(<code>wrangler.local.jsonc</code>, <code>npm run dev</code>):
+Web-UI + Mailbox-Speicherung (lokale DO/R2-Simulation) funktionieren sofort im LAN.
+<b>KI-Agent und echter Mailversand/-empfang</b> haben keine lokale Simulation und
+brauchen danach ein <code>npm run deploy</code> auf einen Cloudflare-Account mit Domain.</p>
 </div>
 <div class="card"><h2>App-Log (letzte Zeilen)</h2>
 <form method="GET" action="/"><button class="ghost" type="submit">Aktualisieren</button></form>

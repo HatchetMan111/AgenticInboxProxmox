@@ -42,7 +42,7 @@ DEBIAN_TEMPLATE_PATTERN="debian-12-standard.*amd64.tar.zst"
 
 # ========================= FEHLERKETTE (voll, nie 1 Zeile) =====================
 fail() {
-  local code=$?
+  local code=${1:-$?}
   echo "==================================================================" >&2
   echo "[FATAL] Installation fehlgeschlagen (Exit-Code: ${code})" >&2
   echo "Befehl : ${BASH_COMMAND}" >&2
@@ -156,7 +156,7 @@ pct exec "${CTID}" -- bash -c "echo Container erreichbar: \$(hostname) \$(hostna
 # --- Wrapper-Dateien in den Container schieben ----------------------------------
 WORKDIR="$(mktemp -d)"
 cleanup() { rm -rf "${WORKDIR}"; }
-trap 'cleanup; fail' ERR
+trap 'rc=$?; cleanup; fail "$rc"' ERR
 echo "-> Lade Wrapper-Repo (${GITHUB_USER}/${GITHUB_REPO}@${GITHUB_BRANCH}) ..."
 if command -v git >/dev/null; then
   git clone --depth 1 --branch "${GITHUB_BRANCH}" \
@@ -208,7 +208,7 @@ curl -fsS "http://${CT_IP}:${SETUP_PORT}/healthz" || {
   exit 1
 }
 cleanup
-trap fail ERR
+trap 'rc=$?; fail "$rc"' ERR
 
 echo "=================================================================="
 echo " ✅ Fertig! Agentic Inbox (lokale Emulation): http://${CT_IP}:${WEB_PORT}"

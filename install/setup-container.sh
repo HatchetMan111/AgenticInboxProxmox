@@ -51,7 +51,14 @@ echo "[1/8] Systempakete + Node.js 20 ..."
 export DEBIAN_FRONTEND=noninteractive
 apt-get update
 apt-get install -y --no-install-recommends \
-  git curl ca-certificates build-essential jq
+  git curl ca-certificates build-essential jq locales
+# Locales erzeugen (Debian-LXC-Templates haben keine -> sonst perl/apt-Warnflut)
+if ! locale -a 2>/dev/null | grep -qi "en_US.utf8"; then
+  sed -i -E 's/^# (en_US\.UTF-8 UTF-8)/\1/' /etc/locale.gen
+  locale-gen en_US.UTF-8
+  update-locale LANG=en_US.UTF-8
+fi
+export LANG=en_US.UTF-8 LC_ALL=en_US.UTF-8
 # Node 20 (Debian-12-Standard ist 18.x — zu alt für Vite 6 / React Router 7)
 if ! command -v node >/dev/null || ! node --version | grep -qE "^v(20|22)\."; then
   curl -fsSL https://deb.nodesource.com/setup_20.x | bash -
@@ -103,6 +110,48 @@ upsert_dev_var() { # key value (leer -> nichts tun)
 }
 upsert_dev_var "POLICY_AUD" "${POLICY_AUD}"
 upsert_dev_var "TEAM_DOMAIN" "${TEAM_DOMAIN}"
+
+echo "[4b/8] Login-freie Lokal-Config (wrangler.local.jsonc) ..."
+# Hintergrund: Upstream-wrangler.jsonc enthält "send_email" mit "remote": true
+# (-> Miniflare startet Remote-Proxy-Session -> Cloudflare-Login Pflicht -> Dev-Server stirbt)
+# und ein "ai"-Binding (Workers AI hat KEINE lokale Simulation -> braucht ebenfalls Login/Netz).
+# Für die lokale Emulation generieren wir daher eine Login-freie Kopie:
+# alle "remote": true entfernen + ai-Block entfernen. wrangler.jsonc bleibt
+# unangetastet deploy-fähig (inkl. AI-Binding).
+node -e '
+const fs = require("fs");
+let raw = fs.readFileSync("wrangler.jsonc", "utf8");
+raw = raw.replace(/,\s*"remote"\s*:\s*true/g, "");
+raw = raw.replace(/"remote"\s*:\s*true\s*,?/g, "");
+const before = raw;
+raw = raw.replace(/"ai"\s*:\s*\{[^{}]*\},?/g, "");
+if (raw === before) console.log("HINWEIS: kein ai-Block in wrangler.jsonc gefunden");
+fs.writeFileSync("wrangler.local.jsonc", raw);
+console.log("wrangler.local.jsonc geschrieben");
+'
+# Fail-closed prüfen: keine Remote-/AI-Bindings mehr drin
+if grep -q '"remote"' wrangler.local.jsonc; then
+  echo "FEHLER: wrangler.local.jsonc enthält noch remote-Bindings:" >&2
+  grep -n '"remote"' wrangler.local.jsonc >&2
+  exit 1
+fi
+if grep -q '"ai"' wrangler.local.jsonc; then
+  echo "FEHLER: wrangler.local.jsonc enthält noch ein ai-Binding:" >&2
+  grep -n '"ai"' wrangler.local.jsonc >&2
+  exit 1
+fi
+echo "  - wrangler.local.jsonc: keine remote-/ai-Bindings (login-frei)."
+# vite-Plugin auf die Lokal-Config zeigen (idempotent, fail-closed)
+# WICHTIG: Guard mit Doppelpunkt — bloßes "configPath" matcht auch "tsconfigPaths"!
+if ! grep -qE 'configPath\s*:' vite.config.ts; then
+  sed -i 's|cloudflare({ viteEnvironment:|cloudflare({ configPath: "wrangler.local.jsonc", viteEnvironment:|' vite.config.ts
+fi
+grep -qE 'configPath\s*:\s*"wrangler.local.jsonc"' vite.config.ts || {
+  echo "FEHLER: configPath-Patch in vite.config.ts fehlgeschlagen (Upstream-Format geändert?)." >&2
+  grep -n 'cloudflare(' vite.config.ts >&2 || true
+  exit 1
+}
+echo "  - vite.config.ts nutzt wrangler.local.jsonc."
 
 echo "[5/8] systemd-Units installieren ..."
 for svc in "${APP_SERVICE}.service" "${SETUP_SERVICE}.service"; do

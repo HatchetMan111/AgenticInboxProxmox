@@ -19,12 +19,15 @@ Lokale Agentic-Inbox-Installation als **LXC-Container auf Proxmox VE** im Stil d
 | Web-UI-Port | `8080` (App), `8081` (Setup-Portal, konfigurierbar) |
 | Default-Ressourcen | 2 vCPU · 2048 MB RAM · 8 GB Disk · Debian 12 LXC, `onboot: 1` |
 
-> **Wichtig — „vollständig lokal"-Hinweis:** Agentic Inbox ist nativ für
+> **Wichtig — was lokal läuft und was nicht:** Agentic Inbox ist nativ für
 > Cloudflare Workers gebaut (Durable Objects/SQLite, R2, Workers AI,
-> Email Routing, Access). Dieses Setup fährt die **lokale Emulation**:
-> Web-UI + Entwicklung laufen sofort im LAN; echter Mail-Empfang/-Versand
-> und KI brauchen danach ein `npm run deploy` auf einen Cloudflare-Account
-> mit Domain. Das Setup-Portal bereitet genau diese Werte
+> Email Routing, Access). Dieses Setup fährt die **login-freie lokale Emulation**
+> (`wrangler.local.jsonc`: ohne `remote`-Bindings, ohne `ai`-Binding):
+> Web-UI + Mailbox-Speicherung (lokale DO/R2-Simulation) laufen sofort im LAN.
+> **KI-Agent und echter Mail-Versand/-Empfang** haben keine lokale Simulation
+> und brauchen danach ein `npm run deploy` auf einen Cloudflare-Account
+> mit Domain (dafür nutzt das Deploy die originale `wrangler.jsonc` mit AI-Binding).
+> Das Setup-Portal bereitet genau diese Werte
 > (`DOMAINS`, `POLICY_AUD`, `TEAM_DOMAIN`) vor.
 
 ## 1 · Installation (Einzeiler auf dem Proxmox-Host als root)
@@ -42,8 +45,10 @@ Danach läuft vollautomatisch:
 1. Debian-12-Template sicherstellen (`pveam download` falls nötig)
 2. `pct create` + `onboot: 1` + Start
 3. Wrapper-Dateien per `pct push` in den Container (`portal/`, `systemd/`, Setup-Script)
-4. `install/setup-container.sh` im Container: Node.js 20, Upstream-Clone,
-   `npm ci`, `wrangler.jsonc`/`​.dev.vars` schreiben, systemd-Units
+4. `install/setup-container.sh` im Container: Node.js 20, Locales, Upstream-Clone,
+   `npm ci`, `wrangler.jsonc`/`​.dev.vars` schreiben, **login-freie
+   `wrangler.local.jsonc`** generieren (kein `remote`, kein `ai`) +
+   `vite.config.ts`-Patch (`configPath`), systemd-Units
    `agentic-inbox.service` + `agentic-inbox-setup.service`
    (`enable`, `Restart=always`, `After=network-online.target`)
 5. Selbst-Verifikation: `systemctl is-active` (beide Services) + HTTP-Checks auf

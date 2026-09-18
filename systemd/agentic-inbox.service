@@ -9,6 +9,8 @@ User=root
 WorkingDirectory=/opt/agentic-inbox/app
 Environment=PORT=8080
 Environment=HOST=0.0.0.0
+Environment=LANG=en_US.UTF-8
+Environment=LC_ALL=en_US.UTF-8
 ExecStart=/usr/bin/npm run dev -- --host 0.0.0.0 --port 8080
 Restart=always
 RestartSec=5
