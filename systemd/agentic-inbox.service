@@ -9,6 +9,10 @@ User=root
 WorkingDirectory=/opt/agentic-inbox/app/build/server
 Environment=LANG=en_US.UTF-8
 Environment=LC_ALL=en_US.UTF-8
+# Deploy-Config (app/.wrangler, legt `vite build` an) entfernen — sonst startet
+# `wrangler dev` nicht (Konflikt user-config vs. deploy-config). State bleibt
+# erhalten (liegt separat in --persist-to).
+ExecStartPre=-/bin/rm -rf /opt/agentic-inbox/app/.wrangler
 ExecStart=/opt/agentic-inbox/app/node_modules/.bin/wrangler dev --port 8080 --ip 0.0.0.0 --persist-to /opt/agentic-inbox/.wrangler-state
 Restart=always
 RestartSec=5

@@ -203,6 +203,11 @@ grep -q 'SKIP_ACCESS' "${BUILD_DIR}/wrangler.json" || {
   echo "FEHLER: build/server/wrangler.json ohne SKIP_ACCESS." >&2
   exit 1
 }
+# Deploy-Config entfernen: `vite build` legt app/.wrangler/deploy/config.json ab,
+# und `wrangler dev` (aus build/server gestartet) bricht dann ab mit
+# 'Found both a user configuration file ... and a deploy configuration file'.
+# Lokaler State liegt separat in STATE_DIR (--persist-to), daher ersatzlos löschbar.
+rm -rf "${APP_DIR}/.wrangler"
 echo "  - Build OK, lokal servierbar."
 
 echo "[6/9] systemd-Units installieren ..."
