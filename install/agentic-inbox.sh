@@ -28,7 +28,7 @@ RAW_BASE="https://raw.githubusercontent.com/${GITHUB_USER}/${GITHUB_REPO}/${GITH
 TARBALL="https://github.com/${GITHUB_USER}/${GITHUB_REPO}/archive/refs/heads/${GITHUB_BRANCH}.tar.gz"
 
 DEFAULT_CTID="${DEFAULT_CTID:-160}"
-DEFAULT_HOSTNAME="${DEFAULT_HOSTNAME:-agentic-inbox}"
+DEFAULT_HOSTNAME="${DEFAULT_HOSTNAME:-agenticinbox}"
 DEFAULT_CORES="${DEFAULT_CORES:-2}"
 DEFAULT_MEMORY="${DEFAULT_MEMORY:-2048}"     # MB
 DEFAULT_DISK="${DEFAULT_DISK:-8}"            # GB

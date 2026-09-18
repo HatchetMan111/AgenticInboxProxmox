@@ -34,7 +34,7 @@ bash -c "$(wget -qLO - https://raw.githubusercontent.com/HatchetMan111/AgenticIn
 ```
 
 Das Script fragt interaktiv ab (mit sinnvollen Defaults):
-`CT-ID` (160) · Hostname · vCPU (2) · RAM (2048) · Disk (8G) ·
+`CT-ID` (160) · Hostname (agenticinbox) · vCPU (2) · RAM (2048) · Disk (8G) ·
 Storage (`local-lvm`) · Bridge (`vmbr0`, DHCP) · App-Port (8080) ·
 Setup-Port (8081) · `DOMAINS` (example.com) · `POLICY_AUD`/`TEAM_DOMAIN` (optional).
 
