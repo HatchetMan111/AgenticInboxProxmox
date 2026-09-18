@@ -129,11 +129,12 @@ ${msg ? `<div class="card">${msg}</div>` : ""}
 </form>
 </div>
 <div class="card"><h2>Hinweis: lokal vs. Cloudflare</h2>
-<p>Dieses LXC-Setup fährt die <b>login-freie lokale Emulation</b>
-(<code>wrangler.local.jsonc</code>, <code>npm run dev</code>):
-Web-UI + Mailbox-Speicherung (lokale DO/R2-Simulation) funktionieren sofort im LAN.
+<p>Dieses LXC-Setup serviert den <b>lokalen Production-Build</b>
+(<code>wrangler dev</code> auf <code>build/server</code>, login-frei):
+Web-UI + Mailbox-Speicherung (lokale DO/R2-Simulation, reboot-sicher) funktionieren sofort im LAN.
 <b>KI-Agent und echter Mailversand/-empfang</b> haben keine lokale Simulation und
-brauchen danach ein <code>npm run deploy</code> auf einen Cloudflare-Account mit Domain.</p>
+brauchen danach ein <code>npm run deploy</code> auf einen Cloudflare-Account mit Domain.
+DOMAINS-Änderungen hier brauchen <b>keinen Rebuild</b> — nur <b>App-Service neu starten</b>.</p>
 </div>
 <div class="card"><h2>App-Log (letzte Zeilen)</h2>
 <form method="GET" action="/"><button class="ghost" type="submit">Aktualisieren</button></form>
@@ -150,6 +151,38 @@ function parseForm(body) {
     if (k) out[decodeURIComponent(k)] = decodeURIComponent((v || "").replaceAll("+", " "));
   }
   return out;
+}
+
+// Lokal-Config aus wrangler.jsonc neu ableiten (login-frei: kein remote/ai,
+// SKIP_ACCESS für lokalen Build). Spiegelt install/setup-container.sh [4b/9].
+// Zusätzlich DOMAINS in die gebaute Config (build/server/wrangler.json) syncen,
+// damit KEIN Rebuild nötig ist (nur Service-Restart).
+function regenerateLocalConfig() {
+  const notes = [];
+  const raw = readTextSafe(WRANGLER_FILE);
+  if (!raw) return ["wrangler.jsonc fehlt — erst Setup laufen lassen"];
+  let local = raw.replace(/,\s*"remote"\s*:\s*true/g, "");
+  local = local.replace(/"remote"\s*:\s*true\s*,?/g, "");
+  local = local.replace(/"ai"\s*:\s*\{[^{}]*\},?/g, "");
+  if (!/"SKIP_ACCESS"/.test(local)) {
+    local = local.replace(/"vars"\s*:\s*\{/, '"vars": {\n\t\t"SKIP_ACCESS": "1",');
+  }
+  fs.writeFileSync(`${APP_DIR}/wrangler.local.jsonc`, local);
+  notes.push("wrangler.local.jsonc neu generiert");
+  const m = local.match(/"DOMAINS"\s*:\s*"([^"]*)"/);
+  const bjFile = `${APP_DIR}/build/server/wrangler.json`;
+  try {
+    const b = JSON.parse(fs.readFileSync(bjFile, "utf8"));
+    if (m) {
+      b.vars = b.vars || {};
+      b.vars.DOMAINS = m[1];
+      fs.writeFileSync(bjFile, JSON.stringify(b, null, "\t"));
+      notes.push(`build/server/wrangler.json DOMAINS=${m[1]} (ohne Rebuild)`);
+    }
+  } catch {
+    notes.push("build/server/wrangler.json fehlt — beim nächsten Setup-Build neu");
+  }
+  return notes;
 }
 
 const server = http.createServer(async (req, res) => {
@@ -192,6 +225,8 @@ const server = http.createServer(async (req, res) => {
       if ((f.policyAud || "").trim()) dv.POLICY_AUD = f.policyAud.trim();
       if ((f.teamDomain || "").trim()) dv.TEAM_DOMAIN = f.teamDomain.trim();
       fs.writeFileSync(DEV_VARS_FILE, serializeDevVars(dv), { mode: 0o600 });
+      const notes = regenerateLocalConfig();
+      console.log("Config gespeichert:", notes.join("; "));
       res.writeHead(303, { location: "/?saved=1" });
       res.end();
       return;

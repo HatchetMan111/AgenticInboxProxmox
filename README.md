@@ -7,7 +7,8 @@ Lokale Agentic-Inbox-Installation als **LXC-Container auf Proxmox VE** im Stil d
 > Upstream: [cloudflare/agentic-inbox](https://github.com/cloudflare/agentic-inbox)
 > (Self-hosted E-Mail-Client mit KI-Agent, React 19 + Hono auf Cloudflare Workers).
 > Dieses Repo legt einen **Proxmox-Wrapper** darum: LXC-Installer (whiptail-Dialoge),
-> lokale Emulation (`npm run dev`) als systemd-Service und ein **Setup-Portal**,
+> Production-Build + lokales Serving (`wrangler dev` auf `build/server`,
+> reboot-sicher persistiert) als systemd-Service und ein **Setup-Portal**,
 > in dem man alles einstellen kann (DOMAINS, Access-Secrets, Restart, Logs).
 
 | Feld | Wert |
@@ -17,18 +18,25 @@ Lokale Agentic-Inbox-Installation als **LXC-Container auf Proxmox VE** im Stil d
 | Tech-Stack | Node.js 20 / TypeScript, React Router v7, Vite, Hono, Wrangler; Portal: Node-stdlib only |
 | Upstream-Repo | https://github.com/cloudflare/agentic-inbox |
 | Web-UI-Port | `8080` (App), `8081` (Setup-Portal, konfigurierbar) |
-| Default-Ressourcen | 2 vCPU · 2048 MB RAM · 8 GB Disk · Debian 12 LXC, `onboot: 1` |
+| Default-Ressourcen | 2 vCPU · 3072 MB RAM (Build braucht RAM, Laufzeit genügsam) · 8 GB Disk · Debian 12 LXC, `onboot: 1` |
 
 > **Wichtig — was lokal läuft und was nicht:** Agentic Inbox ist nativ für
 > Cloudflare Workers gebaut (Durable Objects/SQLite, R2, Workers AI,
-> Email Routing, Access). Dieses Setup fährt die **login-freie lokale Emulation**
-> (`wrangler.local.jsonc`: ohne `remote`-Bindings, ohne `ai`-Binding):
-> Web-UI + Mailbox-Speicherung (lokale DO/R2-Simulation) laufen sofort im LAN.
+> Email Routing, Access). Dieses Setup serviert den **lokalen Production-Build**
+> (`wrangler dev` auf `build/server`, login-frei via `wrangler.local.jsonc`:
+> ohne `remote`-Bindings, ohne `ai`-Binding, mit `SKIP_ACCESS=1`):
+> Web-UI + Mailboxen (lokale DO/R2-Simulation, reboot-sicher unter
+> `/opt/agentic-inbox/.wrangler-state`) laufen sofort im LAN.
 > **KI-Agent und echter Mail-Versand/-Empfang** haben keine lokale Simulation
 > und brauchen danach ein `npm run deploy` auf einen Cloudflare-Account
-> mit Domain (dafür nutzt das Deploy die originale `wrangler.jsonc` mit AI-Binding).
+> mit Domain (dafür bleibt die originale `wrangler.jsonc` mit AI-Binding erhalten).
 > Das Setup-Portal bereitet genau diese Werte
 > (`DOMAINS`, `POLICY_AUD`, `TEAM_DOMAIN`) vor.
+>
+> Technischer Hintergrund: `npm run dev` (Vite-SSR im workerd-Runner) schafft es
+> nicht — ein ~6 MB großes UI-Bundle sprengt den Modul-Transport
+> (`Error: Network connection lost` → HTTP 500). Der Build von Platte hat das
+> Problem nicht.
 
 ## 1 · Installation (Einzeiler auf dem Proxmox-Host als root)
 
@@ -37,7 +45,7 @@ bash -c "$(wget -qLO - https://raw.githubusercontent.com/HatchetMan111/AgenticIn
 ```
 
 Das Script fragt interaktiv ab (mit sinnvollen Defaults):
-`CT-ID` (160) · Hostname (agenticinbox) · vCPU (2) · RAM (2048) · Disk (8G) ·
+`CT-ID` (160) · Hostname (agenticinbox) · vCPU (2) · RAM (3072) · Disk (8G) ·
 Storage (`local-lvm`) · Bridge (`vmbr0`, DHCP) · App-Port (8080) ·
 Setup-Port (8081) · `DOMAINS` (example.com) · `POLICY_AUD`/`TEAM_DOMAIN` (optional).
 
@@ -47,27 +55,32 @@ Danach läuft vollautomatisch:
 3. Wrapper-Dateien per `pct push` in den Container (`portal/`, `systemd/`, Setup-Script)
 4. `install/setup-container.sh` im Container: Node.js 20, Locales, Upstream-Clone,
    `npm ci`, `wrangler.jsonc`/`​.dev.vars` schreiben, **login-freie
-   `wrangler.local.jsonc`** generieren (kein `remote`, kein `ai`) +
-   `vite.config.ts`-Patch (`configPath`), systemd-Units
-   `agentic-inbox.service` + `agentic-inbox-setup.service`
+   `wrangler.local.jsonc`** generieren (kein `remote`, kein `ai`, `SKIP_ACCESS=1`) +
+   `vite.config.ts`-Patch (`configPath`) + `workers/app.ts`-Patch (Access-Bypass)
+5. `npm run build` → `build/server` (wird lokal serviert, kein Cloudflare nötig)
+6. systemd-Units `agentic-inbox.service` (`wrangler dev` auf `build/server`,
+   `--persist-to /opt/agentic-inbox/.wrangler-state`) + `agentic-inbox-setup.service`
    (`enable`, `Restart=always`, `After=network-online.target`)
-5. Selbst-Verifikation: `systemctl is-active` (beide Services) + HTTP-Checks auf
-   `localhost:8080/` und `localhost:8081/healthz`
+7. Selbst-Verifikation: `systemctl is-active` (beide Services) + HTTP-Checks auf
+   `localhost:8080/`, `localhost:8080/api/v1/mailboxes` (muss 200 liefern)
+   und `localhost:8081/healthz`
 
 **Erwartete Ausgabe (Ende):**
 
 ```text
-[7/8] Verifikation ...
+[8/9] Verifikation ...
   - Service agentic-inbox: active
   - Service agentic-inbox-setup: active
   - HTTP-Check App auf localhost:8080 ...
   - App antwortet (HTTP 200).
+  - HTTP-Check API auf localhost:8080/api/v1/mailboxes (muss 200 liefern) ...
+[]  - API antwortet.
   - HTTP-Check Setup-Portal auf localhost:8081/healthz ...
 {"status":"ok","service":"agentic-inbox-setup"}
   - Setup-Portal antwortet.
-[8/8] Fertig.
+[9/9] Fertig.
 ==================================================================
- ✅ Fertig! Agentic Inbox (lokale Emulation): http://192.168.1.60:8080
+ ✅ Fertig! Agentic Inbox (lokaler Build): http://192.168.1.60:8080
     Setup-Portal (alles einstellen)          : http://192.168.1.60:8081
     ...
 ==================================================================
@@ -91,7 +104,13 @@ Oder im Container direkt:
 
 ```bash
 pct exec 160 -- bash /opt/agentic-inbox/setup-container.sh
+# -> Upstream-Pull, npm ci, Patches neu, Rebuild, Services restart
 ```
+
+> Hinweis: Bestehende Container mit 2048 MB RAM sollten vor dem Update mehr
+> bekommen (der Build braucht RAM): `pct set 160 -memory 3072`.
+> DOMAINS-Änderungen im Portal brauchen **keinen** Rebuild (nur Restart) —
+> das Portal synct sie in `build/server/wrangler.json`.
 
 ## 3 · Deinstallation
 
@@ -128,11 +147,11 @@ pct exec 160 -- journalctl -u agentic-inbox-setup --no-pager -n 100
 AgenticInboxProxmox/
 ├── install/
 │   ├── agentic-inbox.sh     # Host-Installer (Einzeiler, whiptail, pct create/push/exec)
-│   └── setup-container.sh   # Setup IM Container (Node 20, npm ci, Units, Verifikation)
+│   └── setup-container.sh   # Setup IM Container (Node 20, npm ci, Build, Units, Verifikation)
 ├── portal/
 │   └── server.mjs           # Setup-WebUI :8081 (stdlib only: Config, Restart, Logs)
 ├── systemd/
-│   ├── agentic-inbox.service        # App :8080 (npm run dev --host 0.0.0.0)
+│   ├── agentic-inbox.service        # App :8080 (wrangler dev auf build/server, persist-to)
 │   └── agentic-inbox-setup.service  # Portal :8081
 └── README.md
 ```

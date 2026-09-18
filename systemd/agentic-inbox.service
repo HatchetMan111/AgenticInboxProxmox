@@ -1,17 +1,15 @@
 [Unit]
-Description=Agentic Inbox (lokale Emulation, npm run dev)
+Description=Agentic Inbox (lokaler Production-Build via wrangler dev)
 After=network-online.target
 Wants=network-online.target
 
 [Service]
 Type=simple
 User=root
-WorkingDirectory=/opt/agentic-inbox/app
-Environment=PORT=8080
-Environment=HOST=0.0.0.0
+WorkingDirectory=/opt/agentic-inbox/app/build/server
 Environment=LANG=en_US.UTF-8
 Environment=LC_ALL=en_US.UTF-8
-ExecStart=/usr/bin/npm run dev -- --host 0.0.0.0 --port 8080
+ExecStart=/opt/agentic-inbox/app/node_modules/.bin/wrangler dev --port 8080 --ip 0.0.0.0 --persist-to /opt/agentic-inbox/.wrangler-state
 Restart=always
 RestartSec=5
 StandardOutput=journal
