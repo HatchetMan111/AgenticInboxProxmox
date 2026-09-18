@@ -13,7 +13,8 @@
 #      + Setup-Portal (:8081, alles einstellbar) als systemd-Services
 #   5. Verifiziert Services + HTTP und gibt die finalen URLs aus
 #
-# Idempotent: existiert die CT-ID bereits, wird Update statt Neuanlage angeboten.
+# Idempotent: ist die CT-ID belegt, wird automatisch die nächste freie genommen.
+# Update eines bestehenden Containers gezielt mit: CT_UPDATE=1 (als Env setzen).
 # Debugging:  DEBUG=1 bash -x install/agentic-inbox.sh   (volles Trace-Log)
 # =============================================================================
 set -euo pipefail
@@ -91,21 +92,27 @@ ask DOMAINS     "DOMAINS (Empfangs-Domain, z. B. example.com)" "${DEFAULT_DOMAIN
 ask POLICY_AUD  "POLICY_AUD (optional, nur für Cloudflare-Deploy)" ""
 ask TEAM_DOMAIN "TEAM_DOMAIN (optional, nur für Cloudflare-Deploy)" ""
 
-# --- Existiert CT-ID bereits? -> Update-Pfad (idempotent) ----------------------
+# --- CT-ID belegt? -> automatisch nächste freie nehmen ---------------------------
 if pct status "${CTID}" >/dev/null 2>&1; then
-  echo "CT ${CTID} existiert bereits."
-  REUSE="update"
-  if command -v whiptail >/dev/null; then
-    whiptail --yesno "CT ${CTID} existiert. Setup im Container erneut ausführen (Update)?" 8 70 \
-      && REUSE="update" || REUSE="abort"
+  if [[ "${CT_UPDATE:-0}" == "1" ]]; then
+    REUSE="update"
+    echo "-> CT ${CTID} existiert, CT_UPDATE=1: Update-Modus (Container wird wiederverwendet)."
   else
-    read -rp "Setup erneut ausführen (Update)? [J/n]: " ans
-    [[ "${ans:-J}" =~ ^[Nn] ]] && REUSE="abort" || REUSE="update"
-  fi
-  if [[ "${REUSE}" == "update" ]]; then
-    echo "-> Update-Modus: Container wird wiederverwendet."
-  else
-    echo "Abgebrochen. Andere CT-ID wählen."; exit 0
+    echo "-> CT ${CTID} ist belegt, suche nächste freie CT-ID ..."
+    NEXT="${CTID}"
+    for _ in $(seq 1 50); do
+      NEXT=$((NEXT + 1))
+      if ! pct status "${NEXT}" >/dev/null 2>&1; then
+        break
+      fi
+    done
+    if pct status "${NEXT}" >/dev/null 2>&1; then
+      echo "Keine freie CT-ID im Bereich ${CTID}-$((CTID + 50)) gefunden." >&2
+      exit 1
+    fi
+    echo "-> Nehme nächste freie CT-ID: ${NEXT} (statt ${CTID})"
+    CTID="${NEXT}"
+    REUSE="create"
   fi
 else
   REUSE="create"
@@ -207,7 +214,8 @@ echo "=================================================================="
 echo " ✅ Fertig! Agentic Inbox (lokale Emulation): http://${CT_IP}:${WEB_PORT}"
 echo "    Setup-Portal (alles einstellen)          : http://${CT_IP}:${SETUP_PORT}"
 echo "    CT-ID ${CTID} (${HOSTNAME}), onboot=1, Services=agentic-inbox + agentic-inbox-setup"
-echo "    Update : Einzeiler erneut laufen lassen (Script fragt automatisch)"
+echo "    Neu    : Einzeiler erneut laufen lassen -> nächste freie CT-ID wird auto genommen"
+echo "    Update : CT_UPDATE=1 bash -c \"\$(wget -qLO - https://raw.githubusercontent.com/${GITHUB_USER}/${GITHUB_REPO}/${GITHUB_BRANCH}/install/agentic-inbox.sh)\""
 echo "    Logs   : pct exec ${CTID} -- journalctl -u agentic-inbox -f"
 echo "    Löschen: pct stop ${CTID} && pct destroy ${CTID}"
 echo "=================================================================="

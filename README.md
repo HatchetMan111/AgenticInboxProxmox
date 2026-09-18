@@ -71,15 +71,15 @@ Danach läuft vollautomatisch:
 Web UI öffnen → App auf `:8080` nutzen → **alles einstellen** im Setup-Portal
 auf `:8081` (DOMAINS ändern, Access-Secrets nachtragen, Restart, Logs).
 
-## 2 · Update
+## 2 · Erneut laufen lassen / Update
 
-Einfach den Einzeiler erneut ausführen — bei existierender CT-ID wird
-automatisch der **Update-Modus** angeboten (Container bleibt, Code + Deps
-werden aktualisiert, Services restarten). Idempotent, mehrfach lauffähig.
+Einfach den Einzeiler erneut ausführen — ist die CT-ID belegt, wird
+**automatisch die nächste freie CT-ID genommen** (kein Abbruch, keine Rückfrage).
+Für ein gezieltes Update des bestehenden Containers:
 
 ```bash
-bash -c "$(wget -qLO - https://raw.githubusercontent.com/HatchetMan111/AgenticInboxProxmox/main/install/agentic-inbox.sh)"
-# -> "CT 160 existiert. Setup erneut ausführen (Update)?" -> Ja
+CT_UPDATE=1 bash -c "$(wget -qLO - https://raw.githubusercontent.com/HatchetMan111/AgenticInboxProxmox/main/install/agentic-inbox.sh)"
+# -> Setup läuft im bestehenden Container (Code + Deps neu, Services restarten)
 ```
 
 Oder im Container direkt:
