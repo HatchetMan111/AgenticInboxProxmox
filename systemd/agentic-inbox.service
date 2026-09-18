@@ -1,0 +1,19 @@
+[Unit]
+Description=Agentic Inbox (lokale Emulation, npm run dev)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=root
+WorkingDirectory=/opt/agentic-inbox/app
+Environment=PORT=8080
+Environment=HOST=0.0.0.0
+ExecStart=/usr/bin/npm run dev -- --host 0.0.0.0 --port 8080
+Restart=always
+RestartSec=5
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target

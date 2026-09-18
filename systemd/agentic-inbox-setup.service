@@ -1,0 +1,21 @@
+[Unit]
+Description=Agentic Inbox Setup-Portal (Config-WebUI :8081)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=root
+WorkingDirectory=/opt/agentic-inbox/portal
+Environment=AI_APP_DIR=/opt/agentic-inbox/app
+Environment=AI_APP_SERVICE=agentic-inbox
+Environment=AI_APP_PORT=8080
+Environment=AI_SETUP_PORT=8081
+ExecStart=/usr/bin/node /opt/agentic-inbox/portal/server.mjs
+Restart=always
+RestartSec=5
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target
